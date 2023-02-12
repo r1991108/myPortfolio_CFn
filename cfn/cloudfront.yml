@@ -1,0 +1,86 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Cloudfront for CDN"
+
+Parameters:
+  S3StackName:
+    Description: S3 stack name for referencing S3 bucket name.
+    Type: String
+
+Resources:
+  CloudfrontOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Description: "Origin access control for S3 bucket"
+        Name: !Sub
+          - ${OriginBucketName}.s3.ap-northeast-1.amazonaws.com
+          - OriginBucketName: !ImportValue
+              Fn::Sub: ${S3StackName}-BucketName
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  CloudfrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: CDN for website
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - HEAD
+            - GET
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
+          Compress: true
+          TargetOriginId: !Sub
+            - ${OriginBucketName}.s3.ap-northeast-1.amazonaws.com
+            - OriginBucketName: !ImportValue
+                Fn::Sub: ${S3StackName}-BucketName
+          ViewerProtocolPolicy: https-only
+        Enabled: true
+        HttpVersion: http2
+        IPV6Enabled: true
+        Origins:
+          - DomainName: !Sub
+              - ${OriginBucketName}.s3.ap-northeast-1.amazonaws.com
+              - OriginBucketName: !ImportValue
+                  Fn::Sub: ${S3StackName}-BucketName
+            Id: !Sub
+              - ${OriginBucketName}.s3.ap-northeast-1.amazonaws.com
+              - OriginBucketName: !ImportValue
+                  Fn::Sub: ${S3StackName}-BucketName
+            OriginAccessControlId: !Ref CloudfrontOAC
+            OriginShield:
+              Enabled: false
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+        PriceClass: PriceClass_200
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+
+  S3BucketPolicy:
+    Type: "AWS::S3::BucketPolicy"
+    Properties:
+      Bucket: !ImportValue
+        Fn::Sub: ${S3StackName}-BucketName
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "AllowCloudFrontServicePrincipalReadOnly"
+            Effect: "Allow"
+            Principal:
+              Service: "cloudfront.amazonaws.com"
+            Action: "s3:GetObject"
+            Resource: !Sub
+              - "arn:aws:s3:::${S3Bucket}/*"
+              - S3Bucket: !ImportValue
+                  Fn::Sub: ${S3StackName}-BucketName
+            Condition:
+              StringEquals:
+                "AWS:SourceArn": !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudfrontDistribution}"
+
+Outputs:
+  CloudfrontDomainName:
+    Description: Cloudfront domain name.
+    Value: !GetAtt CloudfrontDistribution.DomainName
+    Export:
+      Name: !Sub ${AWS::StackName}-CloudfrontDomainName

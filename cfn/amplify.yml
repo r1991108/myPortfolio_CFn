@@ -18,8 +18,8 @@ Parameters:
     Description: Github access token for building a connection between amplify and github
     Type: String
     NoEcho: true
-  CloudfrontDomainName:
-    Description: "e.g. xxxxxxx.cloudfront.net"
+  CloudfrontStackName:
+    Description: Cloudfront stack name for referencing Cloudfront bucket name.
     Type: String
 
 Resources:
@@ -30,7 +30,10 @@ Resources:
       Repository: !Sub "https://github.com/${GitHubAccountName}/${GitHubRepositoryName}"
       EnvironmentVariables:
         - Name: "REACT_APP_CDN_HOST_URL"
-          Value: !Sub "https://${CloudfrontDomainName}"
+          Value: !Sub
+            - "https://${CloudfrontStackName}"
+            - CloudfrontStackName: !ImportValue
+                Fn::Sub: ${CloudfrontStackName}-CloudfrontDomainName
       CustomRules:
         - Source: "/<*>"
           Target: "/index.html"
