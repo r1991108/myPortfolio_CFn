@@ -1,0 +1,38 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "S3 Origin For Cloudfront"
+
+Parameters:
+  BucketName:
+    Description: S3 bucket name. Same with domain name.
+    Type: String
+
+Resources:
+  S3Bucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: !Ref BucketName
+      Tags:
+        - Key: "Name"
+          Value: "bnchen.link"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: "AES256"
+            BucketKeyEnabled: true
+
+  S3BucketPolicy:
+    Type: "AWS::S3::BucketPolicy"
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "AllowCloudFrontServicePrincipalReadOnly"
+            Effect: "Allow"
+            Principal:
+              Service: "cloudfront.amazonaws.com"
+            Action: "s3:GetObject"
+            Resource: !Sub "arn:aws:s3:::${S3Bucket}/*"
+            Condition:
+              StringEquals:
+                "AWS:SourceArn": !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/E2SWWBJRZM25EU"

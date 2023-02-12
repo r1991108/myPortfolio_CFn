@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Amplify for hosting static web site"
+
+Parameters:
+  DomainName:
+    Description: Amplify domain name
+    Type: String
+  AmplifyAppName:
+    Description: Amplify app name
+    Type: String
+  GitHubAccountName:
+    Description: Github Account name
+    Type: String
+  GitHubRepositoryName:
+    Description: Github repository name
+    Type: String
+  GitHubAccessToken:
+    Description: Github access token for building a connection between amplify and github
+    Type: String
+    NoEcho: true
+  CloudfrontDomainName:
+    Description: "e.g. xxxxxxx.cloudfront.net"
+    Type: String
+
+Resources:
+  AmplifyApp:
+    Type: "AWS::Amplify::App"
+    Properties:
+      Name: !Ref AmplifyAppName
+      Repository: !Sub "https://github.com/${GitHubAccountName}/${GitHubRepositoryName}"
+      EnvironmentVariables:
+        - Name: "REACT_APP_CDN_HOST_URL"
+          Value: !Sub "https://${CloudfrontDomainName}"
+      CustomRules:
+        - Source: "/<*>"
+          Target: "/index.html"
+          Status: "404-200"
+        - Source: "</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|ttf|map|json)$)([^.]+$)/>"
+          Target: "/index.html"
+          Status: "200"
+      BuildSpec: |
+        version: 1
+        frontend:
+          phases:
+            preBuild:
+              commands:
+                - npm ci
+            build:
+              commands:
+                - REACT_APP_CDN_HOST_URL=${REACT_APP_CDN_HOST_URL}
+                - npm run build
+          artifacts:
+            baseDirectory: build
+            files:
+              - '**/*'
+          cache:
+            paths:
+              - node_modules/**/*
+
+      EnableBranchAutoDeletion: true
+      AccessToken: !Ref "GitHubAccessToken"
+
+  AmplifyBranch:
+    Type: AWS::Amplify::Branch
+    Properties:
+      AppId: !GetAtt AmplifyApp.AppId
+      BranchName: main
+      Description: main branch for amplify app
+      EnableAutoBuild: true
+
+  AmplifyDomain:
+    Type: AWS::Amplify::Domain
+    Properties:
+      AppId: !GetAtt AmplifyApp.AppId
+      DomainName: !Ref DomainName
+      SubDomainSettings:
+        - BranchName: main
+          Prefix: portfolio
